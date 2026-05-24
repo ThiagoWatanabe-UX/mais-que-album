@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Plan {
+  FREE
+  TRIAL
+  PRO
+}
+
+enum AlbumStatus {
+  DRAFT
+  READY
+  ORDERED
+}
+
+enum LayoutType {
+  SINGLE
+  GRID_2
+  GRID_4
+  COLLAGE
+  CUSTOM
+}
+
+enum AlbumSize {
+  A4
+  A5
+  SQUARE_20
+  SQUARE_30
+}
+
+enum AlbumOrientation {
+  PORTRAIT
+  LANDSCAPE
+}
+
+// ─── Auth.js Standard ────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  // Plano e trial
+  plan              Plan      @default(FREE)
+  trialEndsAt       DateTime?
+
+  // Stripe
+  stripeCustomerId       String?   @unique
+  stripePriceId          String?
+  stripeSubscriptionId   String?   @unique
+  stripeCurrentPeriodEnd DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  albums   Album[]
+}
+
+// ─── Produto: Álbum de Fotos ──────────────────────────────────────────────────
+
+model Album {
+  id          String           @id @default(cuid())
+  title       String
+  description String?          @db.Text
+  status      AlbumStatus      @default(DRAFT)
+  size        AlbumSize        @default(A4)
+  orientation AlbumOrientation @default(PORTRAIT)
+  coverUrl    String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos Photo[]
+  pages  AlbumPage[]
+}
+
+model Photo {
+  id          String  @id @default(cuid())
+  url         String
+  storageKey  String
+  caption     String?
+  width       Int?
+  height      Int?
+  order       Int     @default(0)
+  dayLabel    String? // ex: "Dia 1", "Dia 2"
+  momentLabel String? // ex: "Café da manhã", "Pôr do sol"
+
+  albumId String
+  album   Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photosOnPages PhotoOnPage[]
+}
+
+model AlbumPage {
+  id         String     @id @default(cuid())
+  order      Int
+  layoutType LayoutType @default(GRID_2)
+  customJson String?    @db.Text // JSON de layout customizado
+
+  albumId String
+  album   Album  @relation(fields: [albumId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photosOnPages PhotoOnPage[]
+}
+
+model PhotoOnPage {
+  id       String @id @default(cuid())
+  position Int    @default(0) // posição no layout (0, 1, 2...)
+  x        Float? // posição X customizada (%)
+  y        Float? // posição Y customizada (%)
+  scale    Float  @default(1.0)
+  rotation Float  @default(0.0)
+
+  photoId     String
+  photo       Photo     @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  albumPageId String
+  albumPage   AlbumPage @relation(fields: [albumPageId], references: [id], onDelete: Cascade)
+
+  @@unique([albumPageId, position])
+}
