@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { LogOut, ChevronDown, User } from "lucide-react"
+import { signOut } from "next-auth/react"
 
 interface UserMenuProps {
   name: string | null | undefined
@@ -83,15 +84,13 @@ export function UserMenu({ name, email, image }: UserMenuProps) {
 
           {/* Logout */}
           <div className="border-t border-border py-1">
-            <form action="/api/auth/signout" method="POST">
-              <button
-                type="submit"
-                className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Sair da conta
-              </button>
-            </form>
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair da conta
+            </button>
           </div>
         </div>
       )}
