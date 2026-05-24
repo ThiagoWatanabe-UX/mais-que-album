@@ -14,23 +14,23 @@ const features = [
     title: "Monte suas páginas",
     description:
       "Escolha entre layouts de 1, 2, 3 ou 4 fotos por página. Arraste, solte, reordene. O álbum do seu jeito.",
-    color: "text-[#E07B4F]",
-    bg: "bg-[#FFB8A0]/20",
+    color: "text-accent-foreground",
+    bg: "bg-accent/20",
   },
   {
     icon: Heart,
     title: "Feito para memórias reais",
     description:
       "Álbuns de bebê, viagens em família, casamentos — o formato físico tem um peso que o digital não tem. Vale a pena.",
-    color: "text-[#C85277]",
-    bg: "bg-[#C85277]/8",
+    color: "text-primary",
+    bg: "bg-primary/8",
   },
   {
     icon: Shield,
     title: "Suas fotos em segurança",
     description:
       "Upload seguro com armazenamento em nuvem. Acesse de qualquer dispositivo, edite quando quiser, sem perder nada.",
-    color: "text-[#7C6F64]",
+    color: "text-muted-foreground",
     bg: "bg-muted",
   },
 ]

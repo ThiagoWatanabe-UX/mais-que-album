@@ -12,7 +12,7 @@ export function LandingHero() {
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(ellipse 80% 60% at 50% -10%, #FFB8A022 0%, transparent 70%)",
+            "radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in srgb, var(--accent) 13%, transparent) 0%, transparent 70%)",
         }}
       />
 
@@ -73,7 +73,7 @@ export function LandingHero() {
           {/* Placeholder da screenshot */}
           <div
             className="aspect-[16/9] flex items-center justify-center"
-            style={{ background: "linear-gradient(135deg, #FFF8F5 0%, #FFE8DF 50%, #FFF0EC 100%)" }}
+            style={{ background: "linear-gradient(135deg, var(--background) 0%, color-mix(in srgb, var(--accent) 30%, var(--background)) 50%, var(--secondary) 100%)" }}
           >
             <div className="text-center space-y-2">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 border-2 border-primary/20 flex items-center justify-center mx-auto">
