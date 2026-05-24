@@ -1,141 +1,213 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useRef, useEffect } from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 
-/* ─── Fotos de memórias que flutuam no fundo ─────────────────────────────── */
-const MEMORIES = [
-  { id: 10, seed: "travel1",  w: 220, h: 280, x: "8%",   y: "12%", rotate: -8,  depth: 0.04, delay: 0 },
-  { id: 11, seed: "family2",  w: 180, h: 240, x: "78%",  y: "6%",  rotate: 6,   depth: 0.06, delay: 200 },
-  { id: 12, seed: "beach3",   w: 200, h: 260, x: "85%",  y: "55%", rotate: -4,  depth: 0.03, delay: 400 },
-  { id: 13, seed: "paris4",   w: 160, h: 200, x: "2%",   y: "60%", rotate: 9,   depth: 0.07, delay: 100 },
-  { id: 14, seed: "nature5",  w: 190, h: 250, x: "60%",  y: "72%", rotate: -6,  depth: 0.05, delay: 300 },
-  { id: 15, seed: "kids6",    w: 170, h: 220, x: "22%",  y: "74%", rotate: 5,   depth: 0.04, delay: 500 },
-]
+/* ─── Config do efeito ────────────────────────────────────────────────────── */
+const REVEAL_RADIUS  = 300    // px — raio de revelação ao redor do cursor
+const TRAIL_HOLD_MS  = 1000   // ms — quanto tempo a foto fica acesa após o cursor sair
+const TRAIL_FADE_MS  = 2000   // ms — quanto tempo para sumir completamente
+const LERP_IN        = 0.14   // velocidade de aparecer  (0–1)
+const LERP_OUT       = 0.035  // velocidade de sumir     (mais lenta = rastro mais longo)
 
+/* ─── Gerador determinístico (mesmo resultado em SSR e client) ────────────── */
+function makeLCG(seed: number) {
+  let s = seed >>> 0
+  return () => {
+    s = (Math.imul(1664525, s) + 1013904223) >>> 0
+    return s / 0x100000000
+  }
+}
+
+const rng = makeLCG(2024)
+
+/* ─── Grade densa de fotos: 10 colunas × 8 linhas = 80 fotos ─────────────── */
+const COLS = 10
+const ROWS = 8
+
+type Img = {
+  id: number
+  seed: string
+  leftPct: number
+  topPct: number
+  w: number
+  h: number
+  rotate: number
+}
+
+const IMAGES: Img[] = Array.from({ length: COLS * ROWS }, (_, i) => ({
+  id: i,
+  seed: `r${(i * 17 + 3).toString(36)}`,
+  leftPct: (i % COLS) * (100 / COLS) + (rng() - 0.5) * 6,
+  topPct: Math.floor(i / COLS) * (100 / ROWS) + (rng() - 0.5) * 7,
+  w: 160 + Math.round(rng() * 90),
+  h: 200 + Math.round(rng() * 110),
+  rotate: (rng() - 0.5) * 24,
+}))
+
+/* ─── Componente ──────────────────────────────────────────────────────────── */
 export function LandingHero() {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [mouse, setMouse] = useState({ x: 0.5, y: 0.5 })
-  const [hovered, setHovered] = useState(false)
-  const [visible, setVisible] = useState(false)
+  const containerRef  = useRef<HTMLDivElement>(null)
+  const imgRefs       = useRef<(HTMLDivElement | null)[]>([])
+  const opacities     = useRef(new Float32Array(IMAGES.length))     // atual
+  const lastNear      = useRef(new Float32Array(IMAGES.length))     // timestamp
+  const mouseRef      = useRef({ x: -9999, y: -9999 })
+  const rectRef       = useRef({ left: 0, top: 0, w: 1, h: 1 })
+  const rafRef        = useRef<number>(0)
+  const hintRef       = useRef<HTMLParagraphElement>(null)
+  const everMoved     = useRef(false)
 
-  /* Fade-in on mount */
-  useEffect(() => { setTimeout(() => setVisible(true), 100) }, [])
+  /* Atualizar rect do container */
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      rectRef.current = { left: r.left, top: r.top, w: r.width, h: r.height }
+    }
+    update()
+    window.addEventListener("resize", update)
+    return () => window.removeEventListener("resize", update)
+  }, [])
 
-  /* Rastrear posição do mouse (0–1) */
+  /* Rastrear mouse */
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
-    function onMove(e: MouseEvent) {
-      const rect = el!.getBoundingClientRect()
-      setMouse({
-        x: (e.clientX - rect.left) / rect.width,
-        y: (e.clientY - rect.top) / rect.height,
-      })
+    const onMove = (e: MouseEvent) => {
+      const { left, top } = rectRef.current
+      mouseRef.current = { x: e.clientX - left, y: e.clientY - top }
+
+      if (!everMoved.current) {
+        everMoved.current = true
+        if (hintRef.current) hintRef.current.style.opacity = "0"
+      }
+    }
+
+    const onLeave = () => {
+      mouseRef.current = { x: -9999, y: -9999 }
     }
 
     el.addEventListener("mousemove", onMove)
-    return () => el.removeEventListener("mousemove", onMove)
+    el.addEventListener("mouseleave", onLeave)
+    return () => {
+      el.removeEventListener("mousemove", onMove)
+      el.removeEventListener("mouseleave", onLeave)
+    }
   }, [])
 
-  const spotX = `${mouse.x * 100}%`
-  const spotY = `${mouse.y * 100}%`
+  /* Loop de animação */
+  useEffect(() => {
+    const loop = () => {
+      const now   = performance.now()
+      const { x: mx, y: my } = mouseRef.current
+      const { w: cw, h: ch } = rectRef.current
+
+      IMAGES.forEach((img, i) => {
+        const el = imgRefs.current[i]
+        if (!el) return
+
+        /* Centro da imagem em pixels */
+        const cx = (img.leftPct / 100) * cw + img.w / 2
+        const cy = (img.topPct  / 100) * ch + img.h / 2
+        const dist = Math.hypot(mx - cx, my - cy)
+
+        /* Opacidade alvo: pela distância atual OU pelo rastro */
+        let target = 0
+
+        if (dist < REVEAL_RADIUS) {
+          target = 1
+          lastNear.current[i] = now
+        } else if (dist < REVEAL_RADIUS * 1.6) {
+          /* Borda suave da zona de revelação */
+          const t = 1 - (dist - REVEAL_RADIUS) / (REVEAL_RADIUS * 0.6)
+          target = t
+          if (target > 0.4) lastNear.current[i] = now
+        }
+
+        /* Rastro — imagem que foi iluminada recentemente */
+        if (target < 0.01 && lastNear.current[i] > 0) {
+          const elapsed = now - lastNear.current[i]
+          if (elapsed < TRAIL_HOLD_MS) {
+            target = 0.9
+          } else if (elapsed < TRAIL_HOLD_MS + TRAIL_FADE_MS) {
+            const t = 1 - (elapsed - TRAIL_HOLD_MS) / TRAIL_FADE_MS
+            target = 0.9 * t
+          }
+        }
+
+        /* Interpolação suave */
+        const curr   = opacities.current[i]
+        const speed  = target > curr ? LERP_IN : LERP_OUT
+        const next   = curr + (target - curr) * speed
+        opacities.current[i] = next
+
+        if (Math.abs(next - curr) > 0.001) {
+          el.style.opacity = next.toFixed(3)
+        }
+      })
+
+      rafRef.current = requestAnimationFrame(loop)
+    }
+
+    rafRef.current = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [])
 
   return (
     <section
       ref={containerRef}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="relative min-h-[92vh] flex flex-col items-center justify-center overflow-hidden select-none"
-      style={{
-        background: "linear-gradient(160deg, #0f0608 0%, #1a0a10 40%, #0d0408 100%)",
-      }}
+      className="relative min-h-[94vh] flex flex-col items-center justify-center overflow-hidden"
+      style={{ background: "#080305" }}
     >
-      {/* ── Spotlight que segue o mouse ──────────────────────────────────── */}
-      <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-500"
-        style={{
-          opacity: hovered ? 1 : 0.3,
-          background: `radial-gradient(ellipse 600px 500px at ${spotX} ${spotY},
-            rgba(200,82,119,0.18) 0%,
-            rgba(255,184,160,0.06) 40%,
-            transparent 70%)`,
-        }}
-      />
-
-      {/* ── Grade sutil de fundo ─────────────────────────────────────────── */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(200,82,119,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(200,82,119,0.6) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-        }}
-      />
-
-      {/* ── Fotos de memórias flutuantes ─────────────────────────────────── */}
-      {MEMORIES.map((m) => {
-        const offsetX = (mouse.x - 0.5) * 80 * m.depth * (hovered ? 1 : 0)
-        const offsetY = (mouse.y - 0.5) * 60 * m.depth * (hovered ? 1 : 0)
-        return (
+      {/* ── Grade de fotos (todas invisíveis até o mouse revelar) ─────────── */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden>
+        {IMAGES.map((img, i) => (
           <div
-            key={m.id}
-            className="absolute rounded-xl overflow-hidden shadow-2xl border border-white/10"
+            key={img.id}
+            ref={(el) => { imgRefs.current[i] = el }}
+            className="absolute rounded-lg overflow-hidden shadow-2xl"
             style={{
-              left: m.x,
-              top: m.y,
-              width: m.w,
-              height: m.h,
-              transform: `rotate(${m.rotate}deg) translate(${offsetX}px, ${offsetY}px)`,
-              transition: `transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94),
-                           opacity 0.8s ease ${m.delay}ms`,
-              opacity: hovered ? 1 : 0,
-              willChange: "transform, opacity",
-              zIndex: 1,
+              left:      `${img.leftPct}%`,
+              top:       `${img.topPct}%`,
+              width:     img.w,
+              height:    img.h,
+              transform: `rotate(${img.rotate}deg)`,
+              opacity:   0,
+              willChange: "opacity",
+              /* Fotos se sobrepõem — as menores ficam na frente */
+              zIndex:    Math.round((1 / img.w) * 1000),
             }}
           >
-            {/* Overlay gradiente sobre a foto */}
-            <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-            <Image
-              src={`https://picsum.photos/seed/${m.seed}/${m.w}/${m.h}`}
-              alt="Memória"
-              fill
-              className="object-cover"
-              sizes={`${m.w}px`}
-              unoptimized
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`https://picsum.photos/seed/${img.seed}/${img.w}/${img.h}`}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
+            {/* Vinheta sobre a foto */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
           </div>
-        )
-      })}
+        ))}
+      </div>
 
-      {/* ── Brilho de linha horizontal ───────────────────────────────────── */}
+      {/* ── Overlay escuro muito leve (garante legibilidade do texto) ─────── */}
       <div
-        className="pointer-events-none absolute left-0 right-0 h-px"
-        style={{
-          top: `${mouse.y * 100}%`,
-          background: `linear-gradient(90deg, transparent 0%, rgba(200,82,119,${hovered ? 0.4 : 0.1}) 50%, transparent 100%)`,
-          transition: "top 0.1s linear, opacity 0.3s ease",
-          opacity: hovered ? 1 : 0,
-        }}
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "rgba(8,3,5,0.45)", zIndex: 20 }}
       />
 
-      {/* ── Conteúdo principal ───────────────────────────────────────────── */}
-      <div
-        className="relative z-10 text-center px-6 max-w-4xl mx-auto"
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(24px)",
-          transition: "opacity 0.9s ease, transform 0.9s ease",
-        }}
-      >
+      {/* ── Conteúdo ──────────────────────────────────────────────────────── */}
+      <div className="relative text-center px-6 max-w-4xl mx-auto" style={{ zIndex: 30 }}>
         {/* Badge */}
         <div className="mb-7 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary backdrop-blur-sm">
-            <Sparkles className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-md">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
             Crie álbuns físicos em minutos
           </span>
         </div>
@@ -147,9 +219,10 @@ export function LandingHero() {
           <span
             className="bg-clip-text text-transparent"
             style={{
-              backgroundImage: "linear-gradient(135deg, #C85277 0%, #FFB8A0 50%, #C85277 100%)",
+              backgroundImage:
+                "linear-gradient(135deg, #C85277 0%, #FFB8A0 50%, #C85277 100%)",
               backgroundSize: "200% auto",
-              animation: "gradientShift 4s ease infinite",
+              animation: "gradShift 4s ease infinite",
             }}
           >
             merecem mais
@@ -170,7 +243,7 @@ export function LandingHero() {
               className="h-13 px-8 text-base gap-2 font-semibold"
               style={{
                 background: "linear-gradient(135deg, #C85277 0%, #e8698a 100%)",
-                boxShadow: "0 0 32px rgba(200,82,119,0.4), 0 4px 16px rgba(0,0,0,0.3)",
+                boxShadow: "0 0 32px rgba(200,82,119,0.45), 0 4px 16px rgba(0,0,0,0.4)",
                 border: "1px solid rgba(200,82,119,0.5)",
               }}
             >
@@ -182,36 +255,38 @@ export function LandingHero() {
             <Button
               variant="ghost"
               size="lg"
-              className="h-13 px-8 text-base text-white/60 hover:text-white hover:bg-white/5"
+              className="h-13 px-8 text-base text-white/60 hover:text-white hover:bg-white/5 backdrop-blur-sm"
             >
               Ver como funciona
             </Button>
           </a>
         </div>
 
-        {/* Prova social */}
         <p className="mt-6 text-sm text-white/30">
           Sem cartão de crédito · 1 álbum grátis para sempre
         </p>
 
-        {/* Dica de interação */}
+        {/* Dica que some após o primeiro movimento */}
         <p
-          className="mt-8 text-xs text-white/20 tracking-widest uppercase"
-          style={{
-            opacity: hovered ? 0 : 1,
-            transition: "opacity 0.4s ease",
-          }}
+          ref={hintRef}
+          className="mt-10 text-xs text-white/25 tracking-[0.25em] uppercase"
+          style={{ transition: "opacity 0.6s ease" }}
         >
-          ✦ passe o mouse para ver as memórias ✦
+          ✦ mova o mouse para revelar as memórias ✦
         </p>
       </div>
 
-      {/* ── Gradiente de rodapé ──────────────────────────────────────────── */}
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
+      {/* Gradiente de transição para o conteúdo abaixo */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
+        style={{
+          background: "linear-gradient(to bottom, transparent 0%, var(--background) 100%)",
+          zIndex: 35,
+        }}
+      />
 
-      {/* ── Animação CSS ─────────────────────────────────────────────────── */}
       <style>{`
-        @keyframes gradientShift {
+        @keyframes gradShift {
           0%   { background-position: 0% center; }
           50%  { background-position: 100% center; }
           100% { background-position: 0% center; }
