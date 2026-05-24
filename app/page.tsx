@@ -1,6 +1,7 @@
 import { LandingNav } from "@/components/landing/LandingNav"
 import { LandingHero } from "@/components/landing/LandingHero"
 import { LandingFeatures } from "@/components/landing/LandingFeatures"
+import { LandingAppPreview } from "@/components/landing/LandingAppPreview"
 import { LandingHowItWorks } from "@/components/landing/LandingHowItWorks"
 import { LandingPricing } from "@/components/landing/LandingPricing"
 import { LandingFooter } from "@/components/landing/LandingFooter"
@@ -12,6 +13,7 @@ export default function HomePage() {
       <main className="flex-1">
         <LandingHero />
         <LandingFeatures />
+        <LandingAppPreview />
         <LandingHowItWorks />
         <LandingPricing />
       </main>
