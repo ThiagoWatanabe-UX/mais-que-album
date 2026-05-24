@@ -108,9 +108,27 @@ export function LandingAppPreview() {
 /* ─── Mockup 1: Dashboard de álbuns ──────────────────────────────────────── */
 function DashboardMockup() {
   const albums = [
-    { title: "Viagem para Lisboa 2024", photos: 47, pages: 12, status: "Pronto" },
-    { title: "Nascimento da Isabela", photos: 83, pages: 20, status: "Rascunho" },
-    { title: "Natal em Família", photos: 32, pages: 8, status: "Rascunho" },
+    {
+      title: "Viagem para Lisboa 2024",
+      photos: 47,
+      pages: 12,
+      status: "Pronto",
+      seeds: [10, 11, 14, 19],
+    },
+    {
+      title: "Nascimento da Isabela",
+      photos: 83,
+      pages: 20,
+      status: "Rascunho",
+      seeds: [64, 433, 338, 334],
+    },
+    {
+      title: "Natal em Família",
+      photos: 32,
+      pages: 8,
+      status: "Rascunho",
+      seeds: [30, 431, 17, 28],
+    },
   ]
 
   return (
@@ -129,35 +147,31 @@ function DashboardMockup() {
       {/* Cards de álbuns */}
       <div className="grid grid-cols-3 gap-4">
         {albums.map((a, i) => (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 hover:shadow-md transition-shadow">
-            {/* Thumbnail simulado */}
-            <div
-              className="w-full h-24 rounded-lg mb-3 overflow-hidden"
-              style={{
-                background: i === 0
-                  ? "linear-gradient(135deg, #C85277 0%, #FFB8A0 100%)"
-                  : i === 1
-                  ? "linear-gradient(135deg, #FFB8A0 0%, #FDE8EF 100%)"
-                  : "linear-gradient(135deg, #FDE8EF 0%, #C85277 100%)",
-              }}
-            >
-              {/* Mini fotos simuladas */}
-              <div className="h-full grid grid-cols-2 gap-0.5 p-0.5">
-                {[...Array(4)].map((_, j) => (
-                  <div key={j} className="rounded-sm bg-white/20 backdrop-blur-sm" />
-                ))}
+          <div key={i} className="rounded-xl border border-border bg-card overflow-hidden hover:shadow-md transition-shadow">
+            {/* Thumbnail com grade 2×2 de fotos reais */}
+            <div className="w-full h-28 grid grid-cols-2 gap-px bg-border/40">
+              {a.seeds.map((seed) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={seed}
+                  src={`https://picsum.photos/seed/${seed}/200/120`}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              ))}
+            </div>
+            <div className="p-3">
+              <div className="text-xs font-semibold text-foreground mb-1 line-clamp-1">{a.title}</div>
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span>{a.photos} fotos</span>
+                <span>·</span>
+                <span>{a.pages} páginas</span>
               </div>
-            </div>
-            <div className="text-xs font-semibold text-foreground mb-1 line-clamp-1">{a.title}</div>
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <span>{a.photos} fotos</span>
-              <span>·</span>
-              <span>{a.pages} páginas</span>
-            </div>
-            <div className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              a.status === "Pronto" ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
-            }`}>
-              {a.status}
+              <div className={`mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                a.status === "Pronto" ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+              }`}>
+                {a.status}
+              </div>
             </div>
           </div>
         ))}
@@ -169,22 +183,25 @@ function DashboardMockup() {
 /* ─── Mockup 2: Grid de fotos ────────────────────────────────────────────── */
 function PhotosMockup() {
   const photos = [
-    { label: "Manhã de sábado", color: "#C85277" },
-    { label: "Torre de Belém", color: "#E07B9A" },
-    { label: "Almoço na varanda", color: "#FFB8A0" },
-    { label: "Pôr do sol", color: "#C85277" },
-    { label: "Primeiro passo", color: "#FDE8EF" },
-    { label: "Praia de Cascais", color: "#FFB8A0" },
-    { label: "Café da manhã", color: "#E07B9A" },
-    { label: "Vista do castelo", color: "#C85277" },
+    { seed: 10,  label: "Torre de Belém",     selected: true  },
+    { seed: 11,  label: "Rio Tejo",            selected: false },
+    { seed: 14,  label: "Alfama ao entardecer",selected: true  },
+    { seed: 19,  label: "Pôr do sol",          selected: false },
+    { seed: 22,  label: "Pastéis de Belém",    selected: false },
+    { seed: 25,  label: "Tram 28",             selected: true  },
+    { seed: 27,  label: "Castelo de São Jorge",selected: false },
+    { seed: 29,  label: "Sintra",              selected: false },
   ]
 
   return (
     <div className="p-6 min-h-[420px] bg-background">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="text-sm font-semibold text-foreground">Viagem para Lisboa 2024</div>
-        <div className="h-7 rounded-lg border border-dashed border-primary/50 px-3 flex items-center gap-1.5 text-xs text-primary">
+        <div>
+          <div className="text-sm font-semibold text-foreground">Viagem para Lisboa 2024</div>
+          <div className="text-xs text-muted-foreground mt-0.5">3 fotos selecionadas</div>
+        </div>
+        <div className="h-7 rounded-lg border border-dashed border-primary/50 px-3 flex items-center gap-1.5 text-xs text-primary cursor-pointer hover:bg-primary/5 transition-colors">
           <span>↑</span> Adicionar fotos
         </div>
       </div>
@@ -196,20 +213,26 @@ function PhotosMockup() {
 
       {/* Grid de fotos */}
       <div className="grid grid-cols-4 gap-2">
-        {photos.map((p, i) => (
-          <div key={i} className="aspect-square rounded-lg overflow-hidden relative group">
-            <div
-              className="absolute inset-0"
-              style={{ background: `linear-gradient(135deg, ${p.color} 0%, ${p.color}aa 100%)` }}
+        {photos.map((p) => (
+          <div key={p.seed} className="aspect-square rounded-lg overflow-hidden relative group cursor-pointer">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`https://picsum.photos/seed/${p.seed}/200/200`}
+              alt={p.label}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
-            {/* Simulação de foto com padrão */}
-            <div className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage: "radial-gradient(circle at 30% 40%, white 2px, transparent 2px), radial-gradient(circle at 70% 60%, white 1px, transparent 1px)",
-                backgroundSize: "20px 20px",
-              }}
-            />
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Overlay de seleção */}
+            {p.selected && (
+              <div className="absolute inset-0 bg-primary/30 flex items-start justify-end p-1.5">
+                <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+            )}
+            {/* Label no hover */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <p className="text-[9px] text-white line-clamp-1">{p.label}</p>
             </div>
           </div>
@@ -228,7 +251,14 @@ function PagesMockup() {
         <div className="text-sm font-semibold text-foreground">Montar páginas</div>
         <div className="flex gap-1.5">
           {["1 foto", "2 fotos", "4 fotos", "Colagem"].map((l) => (
-            <div key={l} className={`h-7 rounded-lg px-2.5 flex items-center text-[11px] font-medium ${l === "2 fotos" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <div
+              key={l}
+              className={`h-7 rounded-lg px-2.5 flex items-center text-[11px] font-medium ${
+                l === "2 fotos"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
               + {l}
             </div>
           ))}
@@ -237,15 +267,21 @@ function PagesMockup() {
 
       {/* Páginas */}
       <div className="space-y-3">
-        {/* Página 1 — 1 foto */}
+        {/* Página 1 — 1 foto destaque */}
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-foreground">Página 1</span>
             <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">1 foto</span>
           </div>
-          <div className="h-20 rounded-lg overflow-hidden" style={{ background: "linear-gradient(135deg, #C85277 0%, #FFB8A0 100%)" }}>
-            <div className="h-full flex items-end p-2">
-              <span className="text-[10px] text-white/80">Torre de Belém</span>
+          <div className="h-24 rounded-lg overflow-hidden relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="https://picsum.photos/seed/10/800/200"
+              alt="Torre de Belém"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2">
+              <span className="text-[10px] text-white/90 font-medium">Torre de Belém</span>
             </div>
           </div>
         </div>
@@ -257,9 +293,21 @@ function PagesMockup() {
             <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">2 fotos</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="h-20 rounded-lg" style={{ background: "linear-gradient(135deg, #E07B9A 0%, #FDE8EF 100%)" }} />
-            <div className="h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center text-[11px] text-muted-foreground">
-              + Foto
+            <div className="h-24 rounded-lg overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://picsum.photos/seed/14/400/200"
+                alt="Alfama"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="h-24 rounded-lg overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://picsum.photos/seed/19/400/200"
+                alt="Pôr do sol"
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         </div>
@@ -271,13 +319,15 @@ function PagesMockup() {
             <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">4 fotos</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {[
-              "linear-gradient(135deg, #FFB8A0 0%, #C85277 100%)",
-              "linear-gradient(135deg, #C85277 0%, #FDE8EF 100%)",
-              "linear-gradient(135deg, #FDE8EF 0%, #FFB8A0 100%)",
-              "linear-gradient(135deg, #E07B9A 0%, #C85277 100%)",
-            ].map((bg, i) => (
-              <div key={i} className="h-16 rounded-lg" style={{ background: bg }} />
+            {[22, 25, 27, 29].map((seed) => (
+              <div key={seed} className="h-20 rounded-lg overflow-hidden">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://picsum.photos/seed/${seed}/400/160`}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
             ))}
           </div>
         </div>
