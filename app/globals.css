@@ -24,3 +24,42 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+/* DESIGN-TOKENS:START */
+:root {
+  --background: #FFF8F5;
+  --foreground: #3D1F1F;
+  --card: #FFFFFF;
+  --card-foreground: #3D1F1F;
+  --popover: #FFFFFF;
+  --popover-foreground: #3D1F1F;
+  --primary: #C85277;
+  --primary-foreground: #FFFFFF;
+  --secondary: #FDE8EF;
+  --secondary-foreground: #C85277;
+  --muted: #F9EEF0;
+  --muted-foreground: #9B6B72;
+  --accent: #FFB8A0;
+  --accent-foreground: #7C3020;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #F0D9DC;
+  --input: #F0D9DC;
+  --ring: #C85277;
+  --chart-1: #C85277;
+  --chart-2: #FFB8A0;
+  --chart-3: #F9A8D4;
+  --chart-4: #FECDD3;
+  --chart-5: #FDE8EF;
+  --radius: 0.75rem;
+  --sidebar-background: #FFF0F3;
+  --sidebar-foreground: #3D1F1F;
+  --sidebar-primary: #C85277;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #FDE8EF;
+  --sidebar-accent-foreground: #C85277;
+  --sidebar-border: #F0D9DC;
+  --sidebar-ring: #C85277;
+}
+/* DESIGN-TOKENS:END */
