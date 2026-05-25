@@ -49,21 +49,26 @@ const IMAGES: Img[] = Array.from({ length: COLS * ROWS }, (_, i) => ({
 
 /* ─── Componente ──────────────────────────────────────────────────────────── */
 export function LandingHero() {
-  const containerRef    = useRef<HTMLDivElement>(null)
-  const imgRefs         = useRef<(HTMLDivElement | null)[]>([])
-  const opacities       = useRef(new Float32Array(IMAGES.length))
-  const lastNear        = useRef(new Float32Array(IMAGES.length))
-  const mouseRef        = useRef({ x: -9999, y: -9999 })
-  const rectRef         = useRef({ left: 0, top: 0, w: 1, h: 1 })
-  const rafRef           = useRef<number>(0)
-  const hintRef          = useRef<HTMLParagraphElement>(null)
-  const everMoved        = useRef(false)
-  /* Opacidade mínima por imagem — usada no mobile para fotos estáticas */
-  const mobileFloor      = useRef(new Float32Array(IMAGES.length))
-  /* Container das fotos — no mobile, a opacidade dele cai ao scrollar */
-  const photoLayerRef    = useRef<HTMLDivElement>(null)
+  const containerRef  = useRef<HTMLDivElement>(null)
+  const imgRefs       = useRef<(HTMLDivElement | null)[]>([])
+  const opacities     = useRef(new Float32Array(IMAGES.length))
+  const lastNear      = useRef(new Float32Array(IMAGES.length))
+  const mouseRef      = useRef({ x: -9999, y: -9999 })
+  const rectRef       = useRef({ left: 0, top: 0, w: 1, h: 1 })
+  const rafRef        = useRef<number>(0)
+  const hintRef       = useRef<HTMLParagraphElement>(null)
+  const everMoved     = useRef(false)
+  const mobileFloor   = useRef(new Float32Array(IMAGES.length))
+  const photoLayerRef = useRef<HTMLDivElement>(null)
+  /* Compartilhado entre effects — detectado no primeiro effect */
+  const isTouchRef    = useRef(false)
 
-  /* Atualizar rect do container */
+  /* ── 1. Detectar touch (PRIMEIRO effect — os demais leem isTouchRef) ─────── */
+  useEffect(() => {
+    isTouchRef.current = navigator.maxTouchPoints > 0 || "ontouchstart" in window
+  }, [])
+
+  /* ── 2. Atualizar rect do container ──────────────────────────────────────── */
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -76,17 +81,16 @@ export function LandingHero() {
     return () => window.removeEventListener("resize", update)
   }, [])
 
-  /* Mobile: fotos estáticas + scroll fade ─────────────────────────────────── */
+  /* ── 3. Mobile: pré-revela fotos + fade ao scrollar ─────────────────────── */
   useEffect(() => {
-    const isTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window
-    if (!isTouch) return
+    if (!isTouchRef.current) return
 
-    /* Esconde dica de mouse no mobile */
+    /* Esconde dica de mouse */
     if (hintRef.current) hintRef.current.style.display = "none"
 
-    /* Pré-revela ~65% das fotos espalhadas pela grade com opacidades variadas */
+    /* Pré-revela ~65% das fotos com opacidades variadas */
     IMAGES.forEach((_, i) => {
-      if (i % 3 === 2) return // pula ~33% das fotos para criar respiros
+      if (i % 3 === 2) return // respira ~33%
       const baseOp = 0.28 + ((i * 11 + 3) % 14) * 0.030 // 0.28 → 0.67
       mobileFloor.current[i] = baseOp
       opacities.current[i]   = baseOp
@@ -95,14 +99,13 @@ export function LandingHero() {
       }
     })
 
-    /* Scroll: fade do layer de fotos conforme o usuário desce */
+    /* Fade do layer de fotos conforme o usuário desce */
     const photoLayer = photoLayerRef.current
     const hero       = containerRef.current
     if (!photoLayer || !hero) return
 
     const onScroll = () => {
       const heroH    = hero.offsetHeight
-      // Começa o fade a partir de 5% do hero, conclui em 55%
       const progress = Math.max(0, Math.min(1, (window.scrollY - heroH * 0.05) / (heroH * 0.50)))
       photoLayer.style.opacity = (1 - progress).toFixed(3)
     }
@@ -111,13 +114,14 @@ export function LandingHero() {
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
-  /* Rastrear mouse — desktop apenas (filtra touch/pen via pointerType) ────── */
+  /* ── 4. Desktop: rastrear mouse (pulado completamente em touch) ───────────── */
   useEffect(() => {
+    if (isTouchRef.current) return // ← nenhum listener anexado em dispositivos touch
+
     const el = containerRef.current
     if (!el) return
 
-    const onMove = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return   // ignora touch e caneta
+    const onMove = (e: MouseEvent) => {
       const { left, top } = rectRef.current
       mouseRef.current = { x: e.clientX - left, y: e.clientY - top }
       if (!everMoved.current) {
@@ -125,20 +129,17 @@ export function LandingHero() {
         if (hintRef.current) hintRef.current.style.opacity = "0"
       }
     }
-    const onLeave = (e: PointerEvent) => {
-      if (e.pointerType !== "mouse") return
-      mouseRef.current = { x: -9999, y: -9999 }
-    }
+    const onLeave = () => { mouseRef.current = { x: -9999, y: -9999 } }
 
-    el.addEventListener("pointermove",  onMove)
-    el.addEventListener("pointerleave", onLeave)
+    el.addEventListener("mousemove",  onMove)
+    el.addEventListener("mouseleave", onLeave)
     return () => {
-      el.removeEventListener("pointermove",  onMove)
-      el.removeEventListener("pointerleave", onLeave)
+      el.removeEventListener("mousemove",  onMove)
+      el.removeEventListener("mouseleave", onLeave)
     }
   }, [])
 
-  /* Loop de animação (desktop: mouse-driven / mobile: mantém mobileFloor) ── */
+  /* ── 5. Loop de animação ─────────────────────────────────────────────────── */
   useEffect(() => {
     const loop = () => {
       const now = performance.now()
@@ -174,7 +175,7 @@ export function LandingHero() {
           }
         }
 
-        /* No mobile, fotos nunca somem abaixo do piso pré-revelado */
+        /* Mobile: nunca cai abaixo do piso pré-revelado */
         const effectiveTarget = Math.max(target, mobileFloor.current[i])
 
         const curr  = opacities.current[i]
@@ -200,11 +201,16 @@ export function LandingHero() {
       className="relative min-h-[94vh] flex flex-col items-center justify-center overflow-hidden"
       style={{ background: "#080305" }}
     >
-      {/* Grade de fotos — opacidade controlada pelo scroll no mobile */}
+      {/*
+        Photo layer — zIndex: 1 explícito é crítico:
+        cria sempre um stacking context próprio, isolando os filhos.
+        Impede que mudanças de opacity aqui afetem o z-ordering externo
+        (resolve o bug de texto desaparecendo no iOS Safari).
+      */}
       <div
         ref={photoLayerRef}
         className="absolute inset-0 pointer-events-none"
-        style={{ transition: "opacity 0.15s ease" }}
+        style={{ zIndex: 1 }}
         aria-hidden
       >
         {IMAGES.map((img, i) => (
@@ -220,7 +226,6 @@ export function LandingHero() {
               transform:  `rotate(${img.rotate}deg)`,
               opacity:    0,
               willChange: "opacity",
-              zIndex:     Math.round((1 / img.w) * 1000),
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -236,14 +241,17 @@ export function LandingHero() {
         ))}
       </div>
 
-      {/* Overlay escuro base — garante legibilidade do texto */}
+      {/* Overlay escuro base (z:10) — contraste para o texto */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: "rgba(8,3,5,0.45)", zIndex: 20 }}
+        style={{ background: "rgba(8,3,5,0.45)", zIndex: 10 }}
       />
 
-      {/* Conteúdo */}
-      <div className="relative text-center px-6 max-w-4xl mx-auto" style={{ zIndex: 30 }}>
+      {/* Conteúdo (z:20) — sempre acima de tudo */}
+      <div
+        className="relative text-center px-6 max-w-4xl mx-auto"
+        style={{ zIndex: 20 }}
+      >
         {/* Badge */}
         <div className="mb-7 flex justify-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs sm:text-sm font-medium text-white/80 backdrop-blur-md">
@@ -305,7 +313,7 @@ export function LandingHero() {
           Sem cartão de crédito · 1 álbum grátis para sempre
         </p>
 
-        {/* Dica de mouse — visível apenas no desktop */}
+        {/* Dica de mouse — só desktop (ocultada via JS no mobile) */}
         <p
           ref={hintRef}
           className="mt-10 text-xs text-white/25 tracking-[0.2em] uppercase"
@@ -315,12 +323,12 @@ export function LandingHero() {
         </p>
       </div>
 
-      {/* Gradiente de transição para a próxima seção */}
+      {/* Gradiente de transição (z:30) — acima de tudo para esconder borda */}
       <div
         className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
         style={{
           background: "linear-gradient(to bottom, transparent 0%, var(--background) 100%)",
-          zIndex: 35,
+          zIndex: 30,
         }}
       />
 
