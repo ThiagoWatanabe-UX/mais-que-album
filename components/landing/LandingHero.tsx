@@ -55,13 +55,13 @@ export function LandingHero() {
   const lastNear        = useRef(new Float32Array(IMAGES.length))
   const mouseRef        = useRef({ x: -9999, y: -9999 })
   const rectRef         = useRef({ left: 0, top: 0, w: 1, h: 1 })
-  const rafRef          = useRef<number>(0)
-  const hintRef         = useRef<HTMLParagraphElement>(null)
-  const everMoved       = useRef(false)
+  const rafRef           = useRef<number>(0)
+  const hintRef          = useRef<HTMLParagraphElement>(null)
+  const everMoved        = useRef(false)
   /* Opacidade mínima por imagem — usada no mobile para fotos estáticas */
-  const mobileFloor     = useRef(new Float32Array(IMAGES.length))
-  /* Overlay que escurece as fotos conforme o usuário scrolla (mobile) */
-  const scrollOverlayRef = useRef<HTMLDivElement>(null)
+  const mobileFloor      = useRef(new Float32Array(IMAGES.length))
+  /* Container das fotos — no mobile, a opacidade dele cai ao scrollar */
+  const photoLayerRef    = useRef<HTMLDivElement>(null)
 
   /* Atualizar rect do container */
   useEffect(() => {
@@ -95,28 +95,29 @@ export function LandingHero() {
       }
     })
 
-    /* Scroll: fade das fotos conforme o usuário desce */
-    const overlay = scrollOverlayRef.current
-    const hero    = containerRef.current
-    if (!overlay || !hero) return
+    /* Scroll: fade do layer de fotos conforme o usuário desce */
+    const photoLayer = photoLayerRef.current
+    const hero       = containerRef.current
+    if (!photoLayer || !hero) return
 
     const onScroll = () => {
       const heroH    = hero.offsetHeight
-      // Começa o fade quando passa de 5% do hero, conclui em 55%
+      // Começa o fade a partir de 5% do hero, conclui em 55%
       const progress = Math.max(0, Math.min(1, (window.scrollY - heroH * 0.05) / (heroH * 0.50)))
-      overlay.style.opacity = progress.toFixed(3)
+      photoLayer.style.opacity = (1 - progress).toFixed(3)
     }
 
     window.addEventListener("scroll", onScroll, { passive: true })
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
-  /* Rastrear mouse — desktop ──────────────────────────────────────────────── */
+  /* Rastrear mouse — desktop apenas (filtra touch/pen via pointerType) ────── */
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return   // ignora touch e caneta
       const { left, top } = rectRef.current
       mouseRef.current = { x: e.clientX - left, y: e.clientY - top }
       if (!everMoved.current) {
@@ -124,13 +125,16 @@ export function LandingHero() {
         if (hintRef.current) hintRef.current.style.opacity = "0"
       }
     }
-    const onLeave = () => { mouseRef.current = { x: -9999, y: -9999 } }
+    const onLeave = (e: PointerEvent) => {
+      if (e.pointerType !== "mouse") return
+      mouseRef.current = { x: -9999, y: -9999 }
+    }
 
-    el.addEventListener("mousemove", onMove)
-    el.addEventListener("mouseleave", onLeave)
+    el.addEventListener("pointermove",  onMove)
+    el.addEventListener("pointerleave", onLeave)
     return () => {
-      el.removeEventListener("mousemove", onMove)
-      el.removeEventListener("mouseleave", onLeave)
+      el.removeEventListener("pointermove",  onMove)
+      el.removeEventListener("pointerleave", onLeave)
     }
   }, [])
 
@@ -196,8 +200,13 @@ export function LandingHero() {
       className="relative min-h-[94vh] flex flex-col items-center justify-center overflow-hidden"
       style={{ background: "#080305" }}
     >
-      {/* Grade de fotos */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden>
+      {/* Grade de fotos — opacidade controlada pelo scroll no mobile */}
+      <div
+        ref={photoLayerRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{ transition: "opacity 0.15s ease" }}
+        aria-hidden
+      >
         {IMAGES.map((img, i) => (
           <div
             key={img.id}
@@ -231,14 +240,6 @@ export function LandingHero() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{ background: "rgba(8,3,5,0.45)", zIndex: 20 }}
-      />
-
-      {/* Overlay de scroll — mobile: escurece as fotos conforme o usuário desce */}
-      <div
-        ref={scrollOverlayRef}
-        className="absolute inset-0 pointer-events-none"
-        style={{ background: "#080305", opacity: 0, zIndex: 25, willChange: "opacity", transition: "opacity 0.15s ease" }}
-        aria-hidden
       />
 
       {/* Conteúdo */}
