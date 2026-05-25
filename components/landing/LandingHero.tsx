@@ -58,8 +58,6 @@ export function LandingHero() {
   const rafRef        = useRef<number>(0)
   const hintRef       = useRef<HTMLParagraphElement>(null)
   const everMoved     = useRef(false)
-  const mobileFloor   = useRef(new Float32Array(IMAGES.length))
-  const photoLayerRef = useRef<HTMLDivElement>(null)
   /* Compartilhado entre effects — detectado no primeiro effect */
   const isTouchRef    = useRef(false)
 
@@ -81,37 +79,21 @@ export function LandingHero() {
     return () => window.removeEventListener("resize", update)
   }, [])
 
-  /* ── 3. Mobile: pré-revela fotos + fade ao scrollar ─────────────────────── */
+  /* ── 3. Mobile: apenas revela fotos estáticas, sem mais nada ────────────── */
   useEffect(() => {
     if (!isTouchRef.current) return
 
     /* Esconde dica de mouse */
     if (hintRef.current) hintRef.current.style.display = "none"
 
-    /* Pré-revela ~65% das fotos com opacidades variadas */
+    /* Define opacidade diretamente no DOM — sem RAF, sem listeners */
     IMAGES.forEach((_, i) => {
       if (i % 3 === 2) return // respira ~33%
-      const baseOp = 0.28 + ((i * 11 + 3) % 14) * 0.030 // 0.28 → 0.67
-      mobileFloor.current[i] = baseOp
-      opacities.current[i]   = baseOp
+      const op = 0.28 + ((i * 11 + 3) % 14) * 0.030 // 0.28 → 0.67
       if (imgRefs.current[i]) {
-        imgRefs.current[i]!.style.opacity = baseOp.toFixed(3)
+        imgRefs.current[i]!.style.opacity = op.toFixed(3)
       }
     })
-
-    /* Fade do layer de fotos conforme o usuário desce */
-    const photoLayer = photoLayerRef.current
-    const hero       = containerRef.current
-    if (!photoLayer || !hero) return
-
-    const onScroll = () => {
-      const heroH    = hero.offsetHeight
-      const progress = Math.max(0, Math.min(1, (window.scrollY - heroH * 0.05) / (heroH * 0.50)))
-      photoLayer.style.opacity = (1 - progress).toFixed(3)
-    }
-
-    window.addEventListener("scroll", onScroll, { passive: true })
-    return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
   /* ── 4. Desktop: rastrear mouse (pulado completamente em touch) ───────────── */
@@ -139,8 +121,10 @@ export function LandingHero() {
     }
   }, [])
 
-  /* ── 5. Loop de animação ─────────────────────────────────────────────────── */
+  /* ── 5. Loop de animação — apenas desktop ───────────────────────────────── */
   useEffect(() => {
+    if (isTouchRef.current) return // mobile não usa RAF
+
     const loop = () => {
       const now = performance.now()
       const { x: mx, y: my } = mouseRef.current
@@ -175,12 +159,9 @@ export function LandingHero() {
           }
         }
 
-        /* Mobile: nunca cai abaixo do piso pré-revelado */
-        const effectiveTarget = Math.max(target, mobileFloor.current[i])
-
         const curr  = opacities.current[i]
-        const speed = effectiveTarget > curr ? LERP_IN : LERP_OUT
-        const next  = curr + (effectiveTarget - curr) * speed
+        const speed = target > curr ? LERP_IN : LERP_OUT
+        const next  = curr + (target - curr) * speed
         opacities.current[i] = next
 
         if (Math.abs(next - curr) > 0.001) {
@@ -208,7 +189,6 @@ export function LandingHero() {
         (resolve o bug de texto desaparecendo no iOS Safari).
       */}
       <div
-        ref={photoLayerRef}
         className="absolute inset-0 pointer-events-none"
         style={{ zIndex: 1 }}
         aria-hidden
