@@ -10,7 +10,7 @@ const REVEAL_RADIUS  = 300    // px — raio de revelação ao redor do cursor
 const TRAIL_HOLD_MS  = 1000   // ms — quanto tempo a foto fica acesa após o cursor sair
 const TRAIL_FADE_MS  = 2000   // ms — quanto tempo para sumir completamente
 const LERP_IN        = 0.14   // velocidade de aparecer
-const LERP_OUT       = 0.035  // velocidade de sumir
+const LERP_OUT       = 0.0525 // velocidade de sumir (50% mais rápido)
 
 /* ─── Gerador determinístico (mesmo resultado em SSR e client) ────────────── */
 function makeLCG(seed: number) {
