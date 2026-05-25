@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 
 /* ─── Config do efeito ────────────────────────────────────────────────────── */
-const REVEAL_RADIUS  = 300    // px — raio de revelação ao redor do cursor
-const TRAIL_HOLD_MS  = 1000   // ms — quanto tempo a foto fica acesa após o cursor sair
+const REVEAL_RADIUS  = 300    // px — raio de revelação ao redor do cursor/toque
+const TRAIL_HOLD_MS  = 1000   // ms — quanto tempo a foto fica acesa após sair
 const TRAIL_FADE_MS  = 2000   // ms — quanto tempo para sumir completamente
-const LERP_IN        = 0.14   // velocidade de aparecer  (0–1)
-const LERP_OUT       = 0.035  // velocidade de sumir     (mais lenta = rastro mais longo)
+const LERP_IN        = 0.14   // velocidade de aparecer
+const LERP_OUT       = 0.035  // velocidade de sumir
 
 /* ─── Gerador determinístico (mesmo resultado em SSR e client) ────────────── */
 function makeLCG(seed: number) {
@@ -51,13 +51,15 @@ const IMAGES: Img[] = Array.from({ length: COLS * ROWS }, (_, i) => ({
 export function LandingHero() {
   const containerRef  = useRef<HTMLDivElement>(null)
   const imgRefs       = useRef<(HTMLDivElement | null)[]>([])
-  const opacities     = useRef(new Float32Array(IMAGES.length))     // atual
-  const lastNear      = useRef(new Float32Array(IMAGES.length))     // timestamp
+  const opacities     = useRef(new Float32Array(IMAGES.length))
+  const lastNear      = useRef(new Float32Array(IMAGES.length))
   const mouseRef      = useRef({ x: -9999, y: -9999 })
   const rectRef       = useRef({ left: 0, top: 0, w: 1, h: 1 })
   const rafRef        = useRef<number>(0)
   const hintRef       = useRef<HTMLParagraphElement>(null)
   const everMoved     = useRef(false)
+  /* Opacidade mínima por imagem (usada no mobile para pré-revelar fotos) */
+  const mobileFloor   = useRef(new Float32Array(IMAGES.length))
 
   /* Atualizar rect do container */
   useEffect(() => {
@@ -72,7 +74,30 @@ export function LandingHero() {
     return () => window.removeEventListener("resize", update)
   }, [])
 
-  /* Rastrear mouse */
+  /* Detecção de dispositivo touch — pré-revela fotos e ajusta hint */
+  useEffect(() => {
+    const isTouch = navigator.maxTouchPoints > 0 || "ontouchstart" in window
+    if (!isTouch) return
+
+    // Atualiza texto da dica
+    if (hintRef.current) {
+      hintRef.current.textContent = "✦ toque e arraste para revelar as memórias ✦"
+    }
+
+    // Pré-revela ~25% das fotos de forma espalhada pela grade
+    IMAGES.forEach((_, i) => {
+      if ((i * 7 + 3) % 4 === 0) {
+        const baseOp = 0.30 + ((i * 13) % 10) * 0.038 // 0.30 → 0.64
+        mobileFloor.current[i] = baseOp
+        opacities.current[i]   = baseOp
+        if (imgRefs.current[i]) {
+          imgRefs.current[i]!.style.opacity = baseOp.toFixed(3)
+        }
+      }
+    })
+  }, [])
+
+  /* Rastrear mouse — desktop */
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -80,16 +105,12 @@ export function LandingHero() {
     const onMove = (e: MouseEvent) => {
       const { left, top } = rectRef.current
       mouseRef.current = { x: e.clientX - left, y: e.clientY - top }
-
       if (!everMoved.current) {
         everMoved.current = true
         if (hintRef.current) hintRef.current.style.opacity = "0"
       }
     }
-
-    const onLeave = () => {
-      mouseRef.current = { x: -9999, y: -9999 }
-    }
+    const onLeave = () => { mouseRef.current = { x: -9999, y: -9999 } }
 
     el.addEventListener("mousemove", onMove)
     el.addEventListener("mouseleave", onLeave)
@@ -99,10 +120,36 @@ export function LandingHero() {
     }
   }, [])
 
+  /* Rastrear toque — mobile */
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches[0]
+      const { left, top } = rectRef.current
+      mouseRef.current = { x: t.clientX - left, y: t.clientY - top }
+      if (!everMoved.current) {
+        everMoved.current = true
+        if (hintRef.current) hintRef.current.style.opacity = "0"
+      }
+    }
+    const onTouchEnd = () => { mouseRef.current = { x: -9999, y: -9999 } }
+
+    el.addEventListener("touchmove",  onTouchMove, { passive: true })
+    el.addEventListener("touchend",   onTouchEnd)
+    el.addEventListener("touchcancel",onTouchEnd)
+    return () => {
+      el.removeEventListener("touchmove",  onTouchMove)
+      el.removeEventListener("touchend",   onTouchEnd)
+      el.removeEventListener("touchcancel",onTouchEnd)
+    }
+  }, [])
+
   /* Loop de animação */
   useEffect(() => {
     const loop = () => {
-      const now   = performance.now()
+      const now = performance.now()
       const { x: mx, y: my } = mouseRef.current
       const { w: cw, h: ch } = rectRef.current
 
@@ -110,25 +157,21 @@ export function LandingHero() {
         const el = imgRefs.current[i]
         if (!el) return
 
-        /* Centro da imagem em pixels */
         const cx = (img.leftPct / 100) * cw + img.w / 2
         const cy = (img.topPct  / 100) * ch + img.h / 2
         const dist = Math.hypot(mx - cx, my - cy)
 
-        /* Opacidade alvo: pela distância atual OU pelo rastro */
         let target = 0
 
         if (dist < REVEAL_RADIUS) {
           target = 1
           lastNear.current[i] = now
         } else if (dist < REVEAL_RADIUS * 1.6) {
-          /* Borda suave da zona de revelação */
           const t = 1 - (dist - REVEAL_RADIUS) / (REVEAL_RADIUS * 0.6)
           target = t
           if (target > 0.4) lastNear.current[i] = now
         }
 
-        /* Rastro — imagem que foi iluminada recentemente */
         if (target < 0.01 && lastNear.current[i] > 0) {
           const elapsed = now - lastNear.current[i]
           if (elapsed < TRAIL_HOLD_MS) {
@@ -139,10 +182,13 @@ export function LandingHero() {
           }
         }
 
-        /* Interpolação suave */
-        const curr   = opacities.current[i]
-        const speed  = target > curr ? LERP_IN : LERP_OUT
-        const next   = curr + (target - curr) * speed
+        /* No mobile, nunca cai abaixo da opacidade-base pré-revelada */
+        const floor = mobileFloor.current[i]
+        const effectiveTarget = Math.max(target, floor)
+
+        const curr  = opacities.current[i]
+        const speed = effectiveTarget > curr ? LERP_IN : LERP_OUT
+        const next  = curr + (effectiveTarget - curr) * speed
         opacities.current[i] = next
 
         if (Math.abs(next - curr) > 0.001) {
@@ -163,7 +209,7 @@ export function LandingHero() {
       className="relative min-h-[94vh] flex flex-col items-center justify-center overflow-hidden"
       style={{ background: "#080305" }}
     >
-      {/* ── Grade de fotos (todas invisíveis até o mouse revelar) ─────────── */}
+      {/* Grade de fotos */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden>
         {IMAGES.map((img, i) => (
           <div
@@ -178,7 +224,6 @@ export function LandingHero() {
               transform: `rotate(${img.rotate}deg)`,
               opacity:   0,
               willChange: "opacity",
-              /* Fotos se sobrepõem — as menores ficam na frente */
               zIndex:    Math.round((1 / img.w) * 1000),
             }}
           >
@@ -190,37 +235,35 @@ export function LandingHero() {
               loading="lazy"
               decoding="async"
             />
-            {/* Vinheta sobre a foto */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10" />
           </div>
         ))}
       </div>
 
-      {/* ── Overlay escuro muito leve (garante legibilidade do texto) ─────── */}
+      {/* Overlay escuro */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{ background: "rgba(8,3,5,0.45)", zIndex: 20 }}
       />
 
-      {/* ── Conteúdo ──────────────────────────────────────────────────────── */}
+      {/* Conteúdo */}
       <div className="relative text-center px-6 max-w-4xl mx-auto" style={{ zIndex: 30 }}>
         {/* Badge */}
         <div className="mb-7 flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-sm font-medium text-white/80 backdrop-blur-md">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-xs sm:text-sm font-medium text-white/80 backdrop-blur-md">
+            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
             Crie álbuns físicos em minutos
           </span>
         </div>
 
         {/* Headline */}
-        <h1 className="text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6">
+        <h1 className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight leading-[1.05] mb-6">
           <span className="text-white">Seus momentos</span>
           <br />
           <span
             className="bg-clip-text text-transparent"
             style={{
-              backgroundImage:
-                "linear-gradient(135deg, #C85277 0%, #FFB8A0 50%, #C85277 100%)",
+              backgroundImage: "linear-gradient(135deg, #C85277 0%, #FFB8A0 50%, #C85277 100%)",
               backgroundSize: "200% auto",
               animation: "gradShift 4s ease infinite",
             }}
@@ -230,17 +273,17 @@ export function LandingHero() {
         </h1>
 
         {/* Subtítulo */}
-        <p className="text-lg md:text-xl text-white/50 max-w-xl mx-auto leading-relaxed mb-10">
+        <p className="text-base sm:text-lg md:text-xl text-white/50 max-w-xl mx-auto leading-relaxed mb-10">
           Organize fotos por dia e momento, monte páginas com layouts bonitos
           e peça a impressão do seu álbum físico.
         </p>
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Link href="/login">
+          <Link href="/login" className="w-full sm:w-auto">
             <Button
               size="lg"
-              className="h-13 px-8 text-base gap-2 font-semibold"
+              className="w-full sm:w-auto h-13 px-8 text-base gap-2 font-semibold"
               style={{
                 background: "linear-gradient(135deg, #C85277 0%, #e8698a 100%)",
                 boxShadow: "0 0 32px rgba(200,82,119,0.45), 0 4px 16px rgba(0,0,0,0.4)",
@@ -251,32 +294,32 @@ export function LandingHero() {
               <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
-          <a href="#como-funciona">
+          <a href="#como-funciona" className="w-full sm:w-auto">
             <Button
               variant="ghost"
               size="lg"
-              className="h-13 px-8 text-base text-white/60 hover:text-white hover:bg-white/5 backdrop-blur-sm"
+              className="w-full sm:w-auto h-13 px-8 text-base text-white/60 hover:text-white hover:bg-white/5 backdrop-blur-sm"
             >
               Ver como funciona
             </Button>
           </a>
         </div>
 
-        <p className="mt-6 text-sm text-white/30">
+        <p className="mt-6 text-xs sm:text-sm text-white/30">
           Sem cartão de crédito · 1 álbum grátis para sempre
         </p>
 
-        {/* Dica que some após o primeiro movimento */}
+        {/* Dica — texto adaptado via JS para mobile */}
         <p
           ref={hintRef}
-          className="mt-10 text-xs text-white/25 tracking-[0.25em] uppercase"
+          className="mt-10 text-xs text-white/25 tracking-[0.2em] uppercase"
           style={{ transition: "opacity 0.6s ease" }}
         >
           ✦ mova o mouse para revelar as memórias ✦
         </p>
       </div>
 
-      {/* Gradiente de transição para o conteúdo abaixo */}
+      {/* Gradiente de transição */}
       <div
         className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none"
         style={{
